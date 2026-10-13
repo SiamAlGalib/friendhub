@@ -29,6 +29,49 @@ const API_KEY = "AIzaSyAGq-OE8k2tfF0xIQHMYWIfAQ4JVS69gKs";
 const SITE_URL = "https://www.friendhub.space";
 const OUT_ROOT = path.join(__dirname, "..");
 
+// ---------- Ads + cover helpers ----------
+const AD_CLIENT = "ca-pub-6998786237970751";
+const AD_SLOT_BLOG = "YOUR_SLOT_NUMBER"; // paste your Blog_InArticle_1 slot number here
+
+function adUnit() {
+  if (AD_SLOT_BLOG === "REPLACE_ME") return "";
+  return '<div style="margin:32px auto;max-width:728px;text-align:center;clear:both;">' +
+    '<ins class="adsbygoogle" style="display:block;text-align:center;" data-ad-layout="in-article" data-ad-format="fluid" data-ad-client="' + AD_CLIENT + '" data-ad-slot="' + AD_SLOT_BLOG + '"></ins>' +
+    '<script>(adsbygoogle = window.adsbygoogle || []).push({});</script></div>';
+}
+
+// One ad after paragraph 2, a second near the end only on long posts.
+// Posts with fewer than 5 paragraphs get no ads.
+function withAds(html) {
+  const ad = adUnit();
+  if (!ad) return html;
+  const parts = html.split("</p>");
+  const n = parts.length - 1;
+  if (n < 5) return html;
+  const out = [];
+  parts.forEach((seg, i) => {
+    out.push(seg);
+    if (i < n) out.push("</p>");
+    if (i === 1) out.push(ad);
+    if (n >= 8 && i === n - 2) out.push(ad);
+  });
+  return out.join("");
+}
+
+// Use the compressed WebP from your own domain for the on-page cover
+// (only if the file exists). og:image / twitter:image stay PNG.
+function localCover(url) {
+  const m = /^https:\/\/raw\.githubusercontent\.com\/solus-stay-focused\/friendhub\/refs\/heads\/main\/(.+)\.png$/.exec(url || "");
+  if (!m) return url;
+  try {
+    if (fs.existsSync(path.join(OUT_ROOT, decodeURIComponent(m[1]) + ".webp"))) {
+      return SITE_URL + "/" + m[1] + ".webp";
+    }
+  } catch (e) {}
+  return url;
+}
+
+
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
 
 // ---------- Firestore REST helpers ----------
@@ -202,7 +245,7 @@ function renderPostPage(p) {
   };
 
   const coverBlock = p.coverImageUrl
-    ? `<div class="post-cover"><img src="${escapeHtml(p.coverImageUrl)}" alt="${escapeHtml(title)}"></div>`
+    ? `<div class="post-cover"><img src="${escapeHtml(localCover(p.coverImageUrl))}" alt="${escapeHtml(title)}"></div>`
     : "";
 
   return `<!DOCTYPE html>
@@ -211,6 +254,7 @@ function renderPostPage(p) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 ${FAVICON_TAG}
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6998786237970751" crossorigin="anonymous"></script>
 <title>${escapeHtml(metaTitle)} — FriendHub Blog</title>
 <meta name="description" content="${escapeHtml(metaDesc)}">
 <meta name="robots" content="index, follow, max-image-preview:large">
@@ -270,7 +314,7 @@ ${navBar("/blog/", "All posts")}
       <span>${readMinutes(p.content)} min read</span>
     </div>
     ${coverBlock}
-    <div class="post-body">${p.content || ""}</div>
+    <div class="post-body">${withAds(p.content || "")}</div>
     <div class="post-footer">
       <a class="cta" href="/">Start a chat on FriendHub →</a>
     </div>
