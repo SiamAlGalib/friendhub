@@ -31,10 +31,27 @@ const OUT_ROOT = path.join(__dirname, "..");
 
 // ---------- Ads + cover helpers ----------
 const AD_CLIENT = "ca-pub-6998786237970751";
-const AD_SLOT_BLOG = "YOUR_SLOT_NUMBER"; // paste your Blog_InArticle_1 slot number here
+// Paste your real numeric Blog_InArticle_1 ad slot id here. Until it is a
+// real number, NO ad code is written to blog pages (a placeholder slot id
+// produces broken ad units, which hurts AdSense review).
+const AD_SLOT_BLOG = "";
+
+// Duplicate / near-duplicate posts that should not be published. These
+// overlap heavily with another post on the same topic ("thin / duplicate
+// content" is a common AdSense rejection reason). They are skipped and
+// their folders are removed. Edit this list to taste.
+const EXCLUDE_SLUGS = [
+  "contact-someone-professionally-without-private-email",
+  "how-to-contact-someone-professionally-without-sharing-private-contact-info-friend-hub",
+  "how-to-contact-someone-professionally-without-sharing-private-contact-info-friendhub",
+  "omegle-alternative-friendhub",
+  "friendhub-x-convertkit-lite-collab-free-online-file-converter",
+  "friendhub-convertkit-lite-partnership",
+  "rastgele-goruntulu-sohbet-uygulamalari-tr"
+];
 
 function adUnit() {
-  if (AD_SLOT_BLOG === "REPLACE_ME") return "";
+  if (!/^\d+$/.test(AD_SLOT_BLOG)) return "";
   return '<div style="margin:32px auto;max-width:728px;text-align:center;clear:both;">' +
     '<ins class="adsbygoogle" style="display:block;text-align:center;" data-ad-layout="in-article" data-ad-format="fluid" data-ad-client="' + AD_CLIENT + '" data-ad-slot="' + AD_SLOT_BLOG + '"></ins>' +
     '<script>(adsbygoogle = window.adsbygoogle || []).push({});</script></div>';
@@ -218,7 +235,7 @@ function navBar(backHref, backLabel) {
 }
 
 function siteFooter() {
-  return `<footer class="site-footer">© ${new Date().getFullYear()} FriendHub. All rights reserved.</footer>`;
+  return `<footer class="site-footer"><div style="margin-bottom:10px;display:flex;gap:16px;justify-content:center;flex-wrap:wrap;"><a href="/about">About</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms</a><a href="/cookies">Cookies</a><a href="/community-rules">Community Rules</a><a href="/contact">Contact</a></div>© ${new Date().getFullYear()} FriendHub. All rights reserved.</footer>`;
 }
 
 // ---------- Post page template ----------
@@ -254,7 +271,7 @@ function renderPostPage(p) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 ${FAVICON_TAG}
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6998786237970751" crossorigin="anonymous"></script>
+${adUnit() ? '<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6998786237970751" crossorigin="anonymous"></script>' : ""}
 <title>${escapeHtml(metaTitle)} — FriendHub Blog</title>
 <meta name="description" content="${escapeHtml(metaDesc)}">
 <meta name="robots" content="index, follow, max-image-preview:large">
@@ -467,7 +484,13 @@ ${siteFooter()}
 function renderSitemap(posts) {
   const staticUrls = [
     { loc: `${SITE_URL}/`, priority: "1.0" },
-    { loc: `${SITE_URL}/blog/`, priority: "0.8" }
+    { loc: `${SITE_URL}/blog/`, priority: "0.8" },
+    { loc: `${SITE_URL}/about`, priority: "0.5" },
+    { loc: `${SITE_URL}/contact`, priority: "0.4" },
+    { loc: `${SITE_URL}/privacy`, priority: "0.3" },
+    { loc: `${SITE_URL}/terms`, priority: "0.3" },
+    { loc: `${SITE_URL}/cookies`, priority: "0.3" },
+    { loc: `${SITE_URL}/community-rules`, priority: "0.3" }
   ];
   const postUrls = posts.map(p => ({
     loc: `${SITE_URL}/blog/${p.slug}/`,
@@ -496,6 +519,7 @@ async function main() {
 
   const posts = rawPosts
     .filter(p => p.status === "published" && p.slug)
+    .filter(p => !EXCLUDE_SLUGS.includes(p.slug))
     .map(p => ({ ...p, slug: p.slug || slugify(p.title) }))
     .sort((a, b) => {
       const ad = a.publishedAt instanceof Date ? a.publishedAt.getTime() : 0;
@@ -507,6 +531,15 @@ async function main() {
 
   const blogDir = path.join(OUT_ROOT, "blog");
   fs.mkdirSync(blogDir, { recursive: true });
+
+  // Remove folders of excluded (duplicate) posts so they stop being served
+  for (const slug of EXCLUDE_SLUGS) {
+    const dir = path.join(blogDir, slug);
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      console.log(`  removed duplicate /blog/${slug}/`);
+    }
+  }
 
   // Individual post pages
   for (const p of posts) {
